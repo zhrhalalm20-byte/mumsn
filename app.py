@@ -1,10 +1,11 @@
 import os
 import re
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, send_from_directory, request, jsonify
 import requests
 from bs4 import BeautifulSoup
 
-app = Flask(__name__, template_folder="templates")
+# تحديد المجلد الرئيسي لقراءة ملف index.html
+app = Flask(__name__, static_folder='.', template_folder='.')
 
 BASE_URL = "https://nataeji.moe.gov.ye"
 SEARCH_URL = f"{BASE_URL}/seat-numbers/secondary/"
@@ -90,7 +91,7 @@ def parse_result_html(html):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return send_from_directory('.', 'index.html')
 
 @app.route("/api/search", methods=["POST"])
 def search():
@@ -108,7 +109,6 @@ def search():
     session.headers.update(HEADERS)
 
     try:
-        # 1. طلب الصفحة الأولى لاستخراج رمز CSRF ورابط الكوكيز
         page_res = session.get(SEARCH_URL, timeout=25, headers={"Referer": BASE_URL})
         soup = BeautifulSoup(page_res.text, 'html.parser')
         csrf_input = soup.find('input', {'name': 'csrfmiddlewaretoken'})
@@ -118,7 +118,6 @@ def search():
             
         csrf_token = csrf_input['value']
 
-        # 2. إرسال طلب البحث POST
         payload = {
             "academic_year": academic_year,
             "student_name": student_name,
@@ -139,7 +138,6 @@ def search():
         if not res_json or not res_json.get("success") or not res_json.get("redirect_url"):
             return jsonify({"success": False, "message": res_json.get("message", "لم يتم العثور على بيانات.")}), 404
 
-        # 3. جلب صفحة النتيجة النهائية
         redirect_url = absolute_url(res_json.get("redirect_url"))
         result_res = session.get(redirect_url, timeout=25, headers={"Referer": SEARCH_URL})
         parsed_data = parse_result_html(result_res.text)
